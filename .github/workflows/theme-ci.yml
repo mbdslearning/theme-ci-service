@@ -1,0 +1,110 @@
+name: Theme CI (lint + autofix + smoke)
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Unique job id from GPT"
+        required: true
+      theme_zip_path:
+        description: "Path in repo to uploaded theme zip (e.g., incoming/123.zip)"
+        required: true
+      theme_slug:
+        description: "Theme slug/folder name (e.g., my-theme)"
+        required: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # PHP latest stable (explicit). Change if you want to pin differently.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Ensure docker compose available
+        run: docker compose version
+
+      - name: Prepare workspace
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/logs
+          cp "${{ inputs.theme_zip_path }}" work/theme.zip
+          unzip -q work/theme.zip -d work/src
+
+          # Detect theme root (zip may contain a single top directory)
+          COUNT=$(find work/src -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+          if [[ "$COUNT" == "1" ]]; then
+            THEME_ROOT=$(find work/src -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          else
+            THEME_ROOT="work/src"
+          fi
+
+          echo "theme_root=$THEME_ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Install PHP linters (PHPCS/WPCS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ci
+          composer install --no-interaction --no-progress
+
+      - name: Install JS/CSS linters
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ci
+          npm install --no-audit --no-fund --silent
+
+      - name: Lint + Auto-fix (phpcbf, eslint --fix, stylelint --fix)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ci/run-lint.sh "${{ steps.prep.outputs.theme_root }}" "${{ inputs.theme_slug }}" "work"
+
+      - name: Smoke test (activate theme + hit routes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ci/run-smoke.sh "${{ steps.prep.outputs.theme_root }}" "${{ inputs.theme_slug }}" "work"
+
+      - name: Package patched theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f work/patched.zip
+          # Zip ONLY the theme folder (slug) if it exists, else zip the theme_root contents
+          if [[ -d "${{ steps.prep.outputs.theme_root }}/${{ inputs.theme_slug }}" ]]; then
+            (cd "${{ steps.prep.outputs.theme_root }}" && zip -qr "$GITHUB_WORKSPACE/work/patched.zip" "${{ inputs.theme_slug }}")
+          else
+            (cd "${{ steps.prep.outputs.theme_root }}" && zip -qr "$GITHUB_WORKSPACE/work/patched.zip" .)
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: theme-ci-${{ inputs.job_id }}
+          retention-days: 7
+          path: |
+            work/patched.zip
+            work/results.json
+            work/report.md
+            work/logs/**

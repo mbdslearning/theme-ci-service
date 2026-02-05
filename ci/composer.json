@@ -1,0 +1,12 @@
+{
+  "require-dev": {
+    "squizlabs/php_codesniffer": "^3.10",
+    "wp-coding-standards/wpcs": "^3.0",
+    "phpcsstandards/composer-installer": "^1.0"
+  },
+  "config": {
+    "allow-plugins": {
+      "phpcsstandards/composer-installer": true
+    }
+  }
+}

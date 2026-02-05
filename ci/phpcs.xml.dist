@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="ThemeCI">
+  <description>PHPCS rules for WordPress themes (WPCS baseline)</description>
+
+  <rule ref="WordPress" />
+  <rule ref="WordPress-Extra" />
+  <rule ref="WordPress-Docs" />
+
+  <exclude-pattern>*/vendor/*</exclude-pattern>
+  <exclude-pattern>*/node_modules/*</exclude-pattern>
+  <exclude-pattern>*/dist/*</exclude-pattern>
+  <exclude-pattern>*/build/*</exclude-pattern>
+</ruleset>
