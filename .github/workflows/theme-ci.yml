@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       # PHP latest stable (explicit). Change if you want to pin differently.
       - name: Setup PHP
